@@ -21,6 +21,16 @@ def split_into_sentences(text, language):
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
 
+def dummy_split_into_sentences(text, language):
+    """Dummy function to split text into sentences for testing purposes."""
+    return [
+        sentence.strip() + "."  # Add a period to each sentence for consistency
+        for paragraph in text.split("\n")
+        for sentence in paragraph.split(".")
+        if sentence.strip()
+    ]
+
+
 def align_sentences(sentences1, sentences2):
     """Naive alignment: 1-to-1, truncate to shortest."""
     if len(sentences1) != len(sentences2):
@@ -43,15 +53,18 @@ def main(
     output_file,
     output_valencian_file,
     output_spanish_file,
-    dump_sentences_enabled=True,  # New parameter to control sentence dumping
+    dump_sentences_enabled=True,
+    dummy_split=False,
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
         spanish_text = f.read()
     with open(valencian_file, "r", encoding="utf-8") as f:
         valencian_text = f.read()
 
-    spanish_sentences = split_into_sentences(spanish_text, ES)
-    valencian_sentences = split_into_sentences(valencian_text, VA)
+    split = split_into_sentences if not dummy_split else dummy_split_into_sentences
+
+    spanish_sentences = split(spanish_text, ES)
+    valencian_sentences = split(valencian_text, VA)
 
     # Dump split sentences to separate files if enabled
     if dump_sentences_enabled:
@@ -76,7 +89,9 @@ def main(
     print(f"Aligned {len(aligned)} sentence pairs and saved to {output_file}")
 
 
-def process_directory(input_dir, output_dir, dump_sentences_enabled=True):
+def process_directory(
+    input_dir, output_dir, dump_sentences_enabled=True, dummy_split=False
+):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
         if "va" in dirs and "es" in dirs:
@@ -103,8 +118,12 @@ def process_directory(input_dir, output_dir, dump_sentences_enabled=True):
                     if os.path.isfile(es_file_path):
                         os.makedirs(os.path.dirname(aligned_file_path), exist_ok=True)
                         if dump_sentences_enabled:
-                            os.makedirs(os.path.dirname(va_sentences_path), exist_ok=True)
-                            os.makedirs(os.path.dirname(es_sentences_path), exist_ok=True)
+                            os.makedirs(
+                                os.path.dirname(va_sentences_path), exist_ok=True
+                            )
+                            os.makedirs(
+                                os.path.dirname(es_sentences_path), exist_ok=True
+                            )
                         try:
                             main(
                                 va_file_path,
@@ -112,7 +131,8 @@ def process_directory(input_dir, output_dir, dump_sentences_enabled=True):
                                 aligned_file_path,
                                 va_sentences_path,
                                 es_sentences_path,
-                                dump_sentences_enabled,  # Pass the new parameter
+                                dump_sentences_enabled,
+                                dummy_split,
                             )
                         except SentenceAlignmentError as e:
                             print(
@@ -129,9 +149,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Disable dumping of split sentences to separate files",
     )
+    parser.add_argument(
+        "--dummy-split",
+        action="store_true",
+        help="Use dummy sentence splitting instead of spaCy",
+    )
     args = parser.parse_args()
 
     nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
     nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
 
-    process_directory(args.input_dir, args.output_dir, not args.disable_dump)
+    process_directory(
+        args.input_dir, args.output_dir, not args.disable_dump, args.dummy_split
+    )
