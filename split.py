@@ -1,0 +1,75 @@
+import spacy
+import argparse
+import os
+import json
+
+class SentenceAlignmentError(Exception):
+    """Custom exception for sentence alignment errors."""
+    pass
+
+ES = "es"
+VA = "va"
+nlp = {}
+
+def split_into_sentences(text, language):
+    """Tokenize text into sentences using spaCy."""
+    doc = nlp[language](text)
+    return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+
+def align_sentences(sentences1, sentences2):
+    """Naive alignment: 1-to-1, truncate to shortest."""
+    if len(sentences1) != len(sentences2):
+        raise SentenceAlignmentError("The number of sentences in both lists must match for alignment.")
+    return list(zip(sentences1, sentences2))
+
+def main(spanish_file, valencian_file, output_file):
+    with open(spanish_file, "r", encoding="utf-8") as f:
+        spanish_text = f.read()
+    with open(valencian_file, "r", encoding="utf-8") as f:
+        valencian_text = f.read()
+
+    spanish_sentences = split_into_sentences(spanish_text, ES)
+    valencian_sentences = split_into_sentences(valencian_text, VA)
+    if len(spanish_sentences) != len(valencian_sentences):
+        raise SentenceAlignmentError("Number of sentences in Spanish and Valencian files do not match.")
+
+    aligned = align_sentences(valencian_sentences, spanish_sentences)
+
+    with open(output_file, "w", encoding="utf-8") as out:
+        json.dump([{"valencian": val, "spanish": spa} for val, spa in aligned], out, ensure_ascii=False, indent=4)
+
+    print(f"Aligned {len(aligned)} sentence pairs and saved to {output_file}")
+
+def process_directory(input_dir, output_dir):
+    """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
+    for root, dirs, files in os.walk(input_dir):
+        if "va" in dirs and "es" in dirs:
+            va_dir = os.path.join(root, "va")
+            es_dir = os.path.join(root, "es")
+            aligned_dir = os.path.join(root.replace(input_dir, output_dir), "aligned")
+            os.makedirs(aligned_dir, exist_ok=True)
+
+            for dirpath, _, filenames in os.walk(va_dir):
+                for va_file in filenames:
+                    va_file_path = os.path.join(dirpath, va_file)
+                    relative_path = os.path.relpath(va_file_path, va_dir)
+                    es_file_path = os.path.join(es_dir, relative_path)
+                    aligned_file_path = os.path.join(aligned_dir, os.path.splitext(relative_path)[0] + ".json")
+
+                    if os.path.isfile(es_file_path):
+                        os.makedirs(os.path.dirname(aligned_file_path), exist_ok=True)
+                        try:
+                            main(va_file_path, es_file_path, aligned_file_path)
+                        except SentenceAlignmentError as e:
+                            print(f"Error aligning {va_file_path} and {es_file_path}: {e}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_dir", help="Path to input directory")
+    parser.add_argument("output_dir", help="Path to output directory")
+    args = parser.parse_args()
+
+    nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
+    nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
+
+    process_directory(args.input_dir, args.output_dir)
