@@ -36,7 +36,7 @@ def main(spanish_file, valencian_file, output_file):
     aligned = align_sentences(valencian_sentences, spanish_sentences)
 
     with open(output_file, "w", encoding="utf-8") as out:
-        json.dump([{"valencian": val, "spanish": spa} for val, spa in aligned], out, ensure_ascii=False, indent=4)
+        json.dump([{"valencian": val, "spanish": spa} for spa, val in aligned], out, ensure_ascii=False, indent=4)
 
     print(f"Aligned {len(aligned)} sentence pairs and saved to {output_file}")
 
