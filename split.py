@@ -43,6 +43,7 @@ def main(
     output_file,
     output_valencian_file,
     output_spanish_file,
+    dump_sentences_enabled=True,  # New parameter to control sentence dumping
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
         spanish_text = f.read()
@@ -52,9 +53,10 @@ def main(
     spanish_sentences = split_into_sentences(spanish_text, ES)
     valencian_sentences = split_into_sentences(valencian_text, VA)
 
-    # Dump split sentences to separate files
-    dump_sentences(spanish_sentences, output_spanish_file)
-    dump_sentences(valencian_sentences, output_valencian_file)
+    # Dump split sentences to separate files if enabled
+    if dump_sentences_enabled:
+        dump_sentences(spanish_sentences, output_spanish_file)
+        dump_sentences(valencian_sentences, output_valencian_file)
 
     if len(spanish_sentences) != len(valencian_sentences):
         raise SentenceAlignmentError(
@@ -74,7 +76,7 @@ def main(
     print(f"Aligned {len(aligned)} sentence pairs and saved to {output_file}")
 
 
-def process_directory(input_dir, output_dir):
+def process_directory(input_dir, output_dir, dump_sentences_enabled=True):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
         if "va" in dirs and "es" in dirs:
@@ -100,8 +102,9 @@ def process_directory(input_dir, output_dir):
 
                     if os.path.isfile(es_file_path):
                         os.makedirs(os.path.dirname(aligned_file_path), exist_ok=True)
-                        os.makedirs(os.path.dirname(va_sentences_path), exist_ok=True)
-                        os.makedirs(os.path.dirname(es_sentences_path), exist_ok=True)
+                        if dump_sentences_enabled:
+                            os.makedirs(os.path.dirname(va_sentences_path), exist_ok=True)
+                            os.makedirs(os.path.dirname(es_sentences_path), exist_ok=True)
                         try:
                             main(
                                 va_file_path,
@@ -109,6 +112,7 @@ def process_directory(input_dir, output_dir):
                                 aligned_file_path,
                                 va_sentences_path,
                                 es_sentences_path,
+                                dump_sentences_enabled,  # Pass the new parameter
                             )
                         except SentenceAlignmentError as e:
                             print(
@@ -120,9 +124,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_dir", help="Path to input directory")
     parser.add_argument("output_dir", help="Path to output directory")
+    parser.add_argument(
+        "--disable-dump",
+        action="store_true",
+        help="Disable dumping of split sentences to separate files",
+    )
     args = parser.parse_args()
 
     nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
     nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
 
-    process_directory(args.input_dir, args.output_dir)
+    process_directory(args.input_dir, args.output_dir, not args.disable_dump)
