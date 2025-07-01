@@ -2,7 +2,9 @@ import spacy
 import argparse
 import os
 import json
-
+import re
+import markdown
+from bs4 import BeautifulSoup
 
 class SentenceAlignmentError(Exception):
     """Custom exception for sentence alignment errors."""
@@ -15,14 +17,38 @@ VA = "va"
 nlp = {}
 
 
-def split_into_sentences(text, language):
+def preprocess_text(text, markdown_format):
+    """Preprocess text based on markdown format."""
+    if markdown_format:
+        # Step 1: Preserve paragraph breaks (normalize to '\n\n')
+        text = re.sub(r'\s*\n\s*\n\s*', '\n\n', text)
+
+        # Step 2: Collapse soft line breaks to spaces (single newlines only)
+        text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+
+        # Step 3: Convert Markdown to HTML
+        html = markdown.markdown(text)
+
+        # Step 4: Strip HTML tags
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text()
+
+        # Step 5: Optional cleanup of multiple newlines
+        text = re.sub(r'\n{2,}', '\n', text.strip())
+
+    return text
+
+
+def split_into_sentences(text, language, markdown_format=False):
     """Tokenize text into sentences using spaCy."""
+    text = preprocess_text(text, markdown_format)
     doc = nlp[language](text)
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
 
-def dummy_split_into_sentences(text, language):
+def dummy_split_into_sentences(text, language, markdown_format=False):
     """Dummy function to split text into sentences for testing purposes."""
+    text = preprocess_text(text, markdown_format)
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
         for paragraph in text.split("\n")
@@ -55,6 +81,7 @@ def main(
     output_spanish_file,
     dump_sentences_enabled=True,
     dummy_split=False,
+    markdown_format=False,
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
         spanish_text = f.read()
@@ -63,8 +90,8 @@ def main(
 
     split = split_into_sentences if not dummy_split else dummy_split_into_sentences
 
-    spanish_sentences = split(spanish_text, ES)
-    valencian_sentences = split(valencian_text, VA)
+    spanish_sentences = split(spanish_text, ES, markdown_format)
+    valencian_sentences = split(valencian_text, VA, markdown_format)
 
     # Dump split sentences to separate files if enabled
     if dump_sentences_enabled:
@@ -90,7 +117,7 @@ def main(
 
 
 def process_directory(
-    input_dir, output_dir, dump_sentences_enabled=True, dummy_split=False
+    input_dir, output_dir, dump_sentences_enabled=True, dummy_split=False, markdown_format=False
 ):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -133,6 +160,7 @@ def process_directory(
                                 es_sentences_path,
                                 dump_sentences_enabled,
                                 dummy_split,
+                                markdown_format,
                             )
                         except SentenceAlignmentError as e:
                             print(
@@ -154,11 +182,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Use dummy sentence splitting instead of spaCy",
     )
+    parser.add_argument(
+        "--markdown-format",
+        action="store_true",
+        help="Enable markdown format preprocessing",
+    )
     args = parser.parse_args()
 
     nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
     nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
 
     process_directory(
-        args.input_dir, args.output_dir, not args.disable_dump, args.dummy_split
+        args.input_dir, args.output_dir, not args.disable_dump, args.dummy_split, args.markdown_format
     )
