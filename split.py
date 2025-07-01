@@ -46,8 +46,8 @@ def split_into_sentences(text, language, markdown_format=False):
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
 
-def dummy_split_into_sentences(text, language, markdown_format=False):
-    """Dummy function to split text into sentences for testing purposes."""
+def static_split_into_sentences(text, language, markdown_format=False):
+    """Static function to split text into sentences for testing purposes."""
     text = preprocess_text(text, markdown_format)
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
@@ -80,7 +80,7 @@ def main(
     output_valencian_file,
     output_spanish_file,
     dump_sentences_enabled=True,
-    dummy_split=False,
+    static_split=False,
     markdown_format=False,
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
@@ -88,7 +88,7 @@ def main(
     with open(valencian_file, "r", encoding="utf-8") as f:
         valencian_text = f.read()
 
-    split = split_into_sentences if not dummy_split else dummy_split_into_sentences
+    split = split_into_sentences if not static_split else static_split_into_sentences
 
     spanish_sentences = split(spanish_text, ES, markdown_format)
     valencian_sentences = split(valencian_text, VA, markdown_format)
@@ -117,7 +117,7 @@ def main(
 
 
 def process_directory(
-    input_dir, output_dir, dump_sentences_enabled=True, dummy_split=False, markdown_format=False
+    input_dir, output_dir, dump_sentences_enabled=True, static_split=False, markdown_format=False
 ):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -159,7 +159,7 @@ def process_directory(
                                 va_sentences_path,
                                 es_sentences_path,
                                 dump_sentences_enabled,
-                                dummy_split,
+                                static_split,
                                 markdown_format,
                             )
                         except SentenceAlignmentError as e:
@@ -178,9 +178,9 @@ if __name__ == "__main__":
         help="Disable dumping of split sentences to separate files",
     )
     parser.add_argument(
-        "--dummy-split",
+        "--static-split",
         action="store_true",
-        help="Use dummy sentence splitting instead of spaCy",
+        help="Use static sentence splitting instead of spaCy",
     )
     parser.add_argument(
         "--markdown-format",
@@ -193,5 +193,5 @@ if __name__ == "__main__":
     nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
 
     process_directory(
-        args.input_dir, args.output_dir, not args.disable_dump, args.dummy_split, args.markdown_format
+        args.input_dir, args.output_dir, not args.disable_dump, args.static_split, args.markdown_format
     )
