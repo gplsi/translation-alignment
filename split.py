@@ -61,7 +61,7 @@ def static_split_into_sentences(
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
         for paragraph in text.split("\n")
-        for sentence in paragraph.split(".")
+        for sentence in re.split("\.\s+", paragraph)
         if sentence.strip()
     ]
 
