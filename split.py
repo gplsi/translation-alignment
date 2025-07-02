@@ -61,7 +61,7 @@ def static_split_into_sentences(
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
         for paragraph in text.split("\n")
-        for sentence in re.split("\.\s+", paragraph)
+        for sentence in re.split("\.(?=\s+|[^a-zA-Z0-9\s])", paragraph)
         if sentence.strip()
     ]
 
@@ -120,7 +120,7 @@ def main(
 
     if len(spanish_sentences) != len(valencian_sentences):
         raise SentenceAlignmentError(
-            "Number of sentences in Spanish and Valencian files do not match."
+            f"Number of sentences do not match: Spanish: {len(spanish_sentences)}, Valencian: {len(valencian_sentences)}"
         )
 
     aligned = align_sentences(valencian_sentences, spanish_sentences)
