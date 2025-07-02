@@ -25,20 +25,23 @@ def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
         text = re.sub(r"\s+", " ", text).strip()
 
     elif markdown_format:
-        # Step 1: Preserve paragraph breaks (normalize to '\n\n')
+        # Step 1: Remove list markers at the beginning of lines
+        text = re.sub(r"\n\s*(-|\+|\*|·)\s*", "\n", text)
+
+        # Step 2: Preserve paragraph breaks (normalize to '\n\n')
         text = re.sub(r"\s*\n\s*\n\s*", "\n\n", text)
 
-        # Step 2: Collapse soft line breaks to spaces (single newlines only)
+        # Step 3: Collapse soft line breaks to spaces (single newlines only)
         text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
 
-        # Step 3: Convert Markdown to HTML
+        # Step 4: Convert Markdown to HTML
         html = markdown.markdown(text)
 
-        # Step 4: Strip HTML tags
+        # Step 5: Strip HTML tags
         soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text()
 
-        # Step 5: Optional cleanup of multiple newlines
+        # Step 6: Optional cleanup of multiple newlines
         text = re.sub(r"\n{2,}", "\n", text.strip())
 
     return text
