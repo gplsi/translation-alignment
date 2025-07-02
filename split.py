@@ -6,6 +6,7 @@ import re
 import markdown
 from bs4 import BeautifulSoup
 
+
 class SentenceAlignmentError(Exception):
     """Custom exception for sentence alignment errors."""
 
@@ -17,14 +18,18 @@ VA = "va"
 nlp = {}
 
 
-def preprocess_text(text, markdown_format):
+def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
     """Preprocess text based on markdown format."""
-    if markdown_format:
+
+    if aggregate_whitespaces:
+        text = re.sub(r"\s+", " ", text).strip()
+
+    elif markdown_format:
         # Step 1: Preserve paragraph breaks (normalize to '\n\n')
-        text = re.sub(r'\s*\n\s*\n\s*', '\n\n', text)
+        text = re.sub(r"\s*\n\s*\n\s*", "\n\n", text)
 
         # Step 2: Collapse soft line breaks to spaces (single newlines only)
-        text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+        text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
 
         # Step 3: Convert Markdown to HTML
         html = markdown.markdown(text)
@@ -34,21 +39,25 @@ def preprocess_text(text, markdown_format):
         text = soup.get_text()
 
         # Step 5: Optional cleanup of multiple newlines
-        text = re.sub(r'\n{2,}', '\n', text.strip())
+        text = re.sub(r"\n{2,}", "\n", text.strip())
 
     return text
 
 
-def split_into_sentences(text, language, markdown_format=False):
+def split_into_sentences(
+    text, language, markdown_format=False, aggregate_whitespaces=False
+):
     """Tokenize text into sentences using spaCy."""
-    text = preprocess_text(text, markdown_format)
+    text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     doc = nlp[language](text)
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
 
-def static_split_into_sentences(text, language, markdown_format=False):
+def static_split_into_sentences(
+    text, language, markdown_format=False, aggregate_whitespaces=False
+):
     """Static function to split text into sentences for testing purposes."""
-    text = preprocess_text(text, markdown_format)
+    text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
         for paragraph in text.split("\n")
@@ -82,6 +91,7 @@ def main(
     dump_sentences_enabled=True,
     static_split=False,
     markdown_format=False,
+    aggregate_whitespaces=False,
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
         spanish_text = f.read()
@@ -90,8 +100,18 @@ def main(
 
     split = split_into_sentences if not static_split else static_split_into_sentences
 
-    spanish_sentences = split(spanish_text, ES, markdown_format)
-    valencian_sentences = split(valencian_text, VA, markdown_format)
+    spanish_sentences = split(
+        spanish_text,
+        ES,
+        markdown_format,
+        aggregate_whitespaces,
+    )
+    valencian_sentences = split(
+        valencian_text,
+        VA,
+        markdown_format,
+        aggregate_whitespaces,
+    )
 
     # Dump split sentences to separate files if enabled
     if dump_sentences_enabled:
@@ -117,7 +137,12 @@ def main(
 
 
 def process_directory(
-    input_dir, output_dir, dump_sentences_enabled=True, static_split=False, markdown_format=False
+    input_dir,
+    output_dir,
+    dump_sentences_enabled=True,
+    static_split=False,
+    markdown_format=False,
+    aggregate_whitespaces=False,
 ):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -161,6 +186,7 @@ def process_directory(
                                 dump_sentences_enabled,
                                 static_split,
                                 markdown_format,
+                                aggregate_whitespaces,
                             )
                         except SentenceAlignmentError as e:
                             print(
@@ -187,11 +213,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable markdown format preprocessing",
     )
+    parser.add_argument(
+        "--aggregate-whitespaces",
+        action="store_true",
+        help="Aggregate whitespaces in the text",
+    )
     args = parser.parse_args()
 
     nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
     nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
 
     process_directory(
-        args.input_dir, args.output_dir, not args.disable_dump, args.static_split, args.markdown_format
+        args.input_dir,
+        args.output_dir,
+        not args.disable_dump,
+        args.static_split,
+        args.markdown_format,
+        args.aggregate_whitespaces,
     )
