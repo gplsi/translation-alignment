@@ -44,6 +44,9 @@ def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
         # Step 6: Optional cleanup of multiple newlines
         text = re.sub(r"\n{2,}", "\n", text.strip())
 
+        # Step 7: Aggregate whitespaces
+        text = re.sub(r"\s+", " ", text).strip()
+
     return text
 
 
@@ -64,7 +67,7 @@ def static_split_into_sentences(
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
         for paragraph in text.split("\n")
-        for sentence in re.split("\.(?=\s+|[^a-zA-Z0-9\s])", paragraph)
+        for sentence in re.split("\.(?=\s+(?![0-9])|[^a-zA-Z0-9\s])", paragraph)
         if sentence.strip()
     ]
 
