@@ -139,9 +139,6 @@ def main(
             indent=4,
         )
 
-    print(f"Aligned {len(aligned)} sentence pairs and saved to {output_file}")
-
-
 def process_directory(
     input_dir,
     output_dir,
@@ -149,6 +146,7 @@ def process_directory(
     static_split=False,
     markdown_format=False,
     aggregate_whitespaces=False,
+    verbose=True,
 ):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -194,10 +192,19 @@ def process_directory(
                                 markdown_format,
                                 aggregate_whitespaces,
                             )
+                            if verbose:
+                                print(
+                                    f"Successfully aligned {va_file_path} and {es_file_path}: saved to {aligned_file_path}"
+                                )
+                            else:
+                                print("✅", end=" ", flush=True)
                         except SentenceAlignmentError as e:
-                            print(
-                                f"Error aligning {va_file_path} and {es_file_path}: {e}"
-                            )
+                            if verbose:
+                                print(
+                                    f"Error aligning {va_file_path} and {es_file_path}: {e}"
+                                )
+                            else:
+                                print("❌", end=" ", flush=True)
 
 
 if __name__ == "__main__":
@@ -224,6 +231,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Aggregate whitespaces in the text",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output",
+    )
     args = parser.parse_args()
 
     nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
@@ -236,4 +248,5 @@ if __name__ == "__main__":
         args.static_split,
         args.markdown_format,
         args.aggregate_whitespaces,
+        args.verbose,
     )
