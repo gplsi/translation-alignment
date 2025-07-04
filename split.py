@@ -242,10 +242,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "--use-multilingual",
+        action="store_true",
+        help="Use multilingual model (xx_sent_ud_sm) for sentence splitting",
+    )
     args = parser.parse_args()
 
-    nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
-    nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
+    if not args.use_multilingual:
+        nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
+        nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
+    else:
+        nlp[ES] = nlp[VA] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
 
     process_directory(
         args.input_dir,
