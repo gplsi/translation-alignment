@@ -9,8 +9,9 @@ from bs4 import BeautifulSoup
 
 class SentenceAlignmentError(Exception):
     """Custom exception for sentence alignment errors."""
-
-    pass
+    def __init__(self, message, difference):
+        super().__init__(message)
+        self.difference = difference
 
 
 ES = "es"
@@ -75,8 +76,10 @@ def static_split_into_sentences(
 def align_sentences(sentences1, sentences2):
     """Naive alignment: 1-to-1, truncate to shortest."""
     if len(sentences1) != len(sentences2):
+        difference = abs(len(sentences1) - len(sentences2))
         raise SentenceAlignmentError(
-            "The number of sentences in both lists must match for alignment."
+            f"Sentence count mismatch: Spanish: {len(sentences1)}, Valencian: {len(sentences2)}",
+            difference,
         )
     return list(zip(sentences1, sentences2))
 
@@ -126,7 +129,8 @@ def main(
 
     if len(spanish_sentences) != len(valencian_sentences):
         raise SentenceAlignmentError(
-            f"Number of sentences do not match: Spanish: {len(spanish_sentences)}, Valencian: {len(valencian_sentences)}"
+            f"Number of sentences do not match: Spanish: {len(spanish_sentences)}, Valencian: {len(valencian_sentences)}",
+            abs(len(spanish_sentences) - len(valencian_sentences)),
         )
 
     aligned = align_sentences(valencian_sentences, spanish_sentences)
@@ -197,14 +201,16 @@ def process_directory(
                                     f"Successfully aligned {va_file_path} and {es_file_path}: saved to {aligned_file_path}"
                                 )
                             else:
-                                print("✅", end=" ", flush=True)
+                                print("✅", end="", flush=True)
                         except SentenceAlignmentError as e:
                             if verbose:
                                 print(
                                     f"Error aligning {va_file_path} and {es_file_path}: {e}"
                                 )
+                            elif e.difference == 1:
+                                print("🟨", end="", flush=True)
                             else:
-                                print("❌", end=" ", flush=True)
+                                print("❌", end="", flush=True)
 
 
 if __name__ == "__main__":
