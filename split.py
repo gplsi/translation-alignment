@@ -5,10 +5,13 @@ import json
 import re
 import markdown
 from bs4 import BeautifulSoup
+from sentence_transformers import SentenceTransformer, util
+from functools import lru_cache
 
 
 class SentenceAlignmentError(Exception):
     """Custom exception for sentence alignment errors."""
+
     def __init__(self, message, difference):
         super().__init__(message)
         self.difference = difference
@@ -73,15 +76,128 @@ def static_split_into_sentences(
     ]
 
 
-def align_sentences(sentences1, sentences2):
+def align_sentences(sentences0, sentences1):
     """Naive alignment: 1-to-1, truncate to shortest."""
-    if len(sentences1) != len(sentences2):
-        difference = abs(len(sentences1) - len(sentences2))
+    if len(sentences0) != len(sentences1):
+        difference = abs(len(sentences0) - len(sentences1))
         raise SentenceAlignmentError(
-            f"Sentence count mismatch: Spanish: {len(sentences1)}, Valencian: {len(sentences2)}",
+            f"Sentence count mismatch: Spanish: {len(sentences0)}, Valencian: {len(sentences1)}",
             difference,
         )
-    return list(zip(sentences1, sentences2))
+    return list(zip(sentences0, sentences1))
+
+
+@lru_cache(maxsize=1)
+def get_model(model_name):
+    """Get the SentenceTransformer model with caching."""
+    try:
+        model = SentenceTransformer(model_name)
+        return model
+    except Exception as e:
+        raise ValueError(f"Failed to load model '{model_name}': {e}")
+
+
+def align_sentences_with_embeddings(
+    sentences0,
+    sentences1,
+    model_name,
+    threshold=0.7,
+    loose=False,
+    attempts=5,
+):
+    """Align sentences using embeddings and cosine similarity."""
+
+    if not sentences0 or not sentences1:
+        raise SentenceAlignmentError(
+            "One or both sentence lists are empty.", len(sentences0) + len(sentences1)
+        )
+
+    model = get_model(model_name)
+    sentences = [sentences0, sentences1]
+
+    @lru_cache(maxsize=6)
+    def get_embedding(group, pivot):
+        """Get the embedding for a sentence, caching results."""
+        return model.encode(sentences[group][pivot], convert_to_tensor=True)
+
+    pivot0 = 0
+    pivot1 = 0
+    aligned_sentences = []
+
+    while pivot0 < len(sentences0) and pivot1 < len(sentences1):
+        embedding0 = get_embedding(0, pivot0)
+        embedding1 = get_embedding(1, pivot1)
+        similarity = util.cos_sim(embedding0, embedding1)
+
+        if similarity.item() >= threshold:
+            aligned_sentences.append((sentences0[pivot0], sentences1[pivot1]))
+            pivot0 += 1
+            pivot1 += 1
+        else:
+            similarities = [
+                (
+                    similarity.item(),
+                    pivot0 + 1,
+                    pivot1 + 1,
+                    sentences0[pivot0],
+                    sentences1[pivot1],
+                )
+            ]
+
+            if pivot0 + 1 < len(sentences0):
+                candidate0 = sentences0[pivot0 + 1]
+                candidate0_embedding = get_embedding(0, pivot0 + 1)
+                candidate0_similarity = util.cos_sim(candidate0_embedding, embedding1)
+                if candidate0_similarity.item() >= threshold:
+                    aligned_sentences.append((candidate0, sentences1[pivot1]))
+                    pivot0 += 2
+                    pivot1 += 1
+                    continue
+                similarities.append(
+                    (
+                        candidate0_similarity.item(),
+                        pivot0 + 2,
+                        pivot1 + 1,
+                        candidate0,
+                        sentences1[pivot1],
+                    )
+                )
+
+            if pivot1 + 1 < len(sentences1):
+                candidate1 = sentences1[pivot1 + 1]
+                candidate1_embedding = get_embedding(1, pivot1 + 1)
+                candidate1_similarity = util.cos_sim(embedding0, candidate1_embedding)
+                if candidate1_similarity.item() >= threshold:
+                    aligned_sentences.append((sentences0[pivot0], candidate1))
+                    pivot0 += 1
+                    pivot1 += 2
+                    continue
+                similarities.append(
+                    (
+                        candidate1_similarity.item(),
+                        pivot0 + 1,
+                        pivot1 + 2,
+                        sentences0[pivot0],
+                        candidate1,
+                    )
+                )
+
+            if loose:
+                best_similarity, pivot0, pivot1, sentence0, sentence1 = max(
+                    similarities,
+                    key=lambda x: x[0],
+                )
+                aligned_sentences.append((sentence0, sentence1))
+            elif attempts > 0:
+                attempts -= 1
+                pivot0 += 1
+                pivot1 += 1
+            else:
+                raise SentenceAlignmentError(
+                    "No suitable alignment found.", float("inf")
+                )
+
+    return aligned_sentences
 
 
 def dump_sentences(sentences, output_file):
@@ -101,6 +217,7 @@ def main(
     static_split=False,
     markdown_format=False,
     aggregate_whitespaces=False,
+    alignment_model_name=None,
 ):
     with open(spanish_file, "r", encoding="utf-8") as f:
         spanish_text = f.read()
@@ -127,13 +244,12 @@ def main(
         dump_sentences(spanish_sentences, output_spanish_file)
         dump_sentences(valencian_sentences, output_valencian_file)
 
-    if len(spanish_sentences) != len(valencian_sentences):
-        raise SentenceAlignmentError(
-            f"Number of sentences do not match: Spanish: {len(spanish_sentences)}, Valencian: {len(valencian_sentences)}",
-            abs(len(spanish_sentences) - len(valencian_sentences)),
+    if alignment_model_name is None:
+        aligned = align_sentences(valencian_sentences, spanish_sentences)
+    else:
+        aligned = align_sentences_with_embeddings(
+            valencian_sentences, spanish_sentences, alignment_model_name
         )
-
-    aligned = align_sentences(valencian_sentences, spanish_sentences)
 
     with open(output_file, "w", encoding="utf-8") as out:
         json.dump(
@@ -143,6 +259,7 @@ def main(
             indent=4,
         )
 
+
 def process_directory(
     input_dir,
     output_dir,
@@ -151,6 +268,7 @@ def process_directory(
     markdown_format=False,
     aggregate_whitespaces=False,
     verbose=True,
+    alignment_model_name=None,
 ):
     """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -195,6 +313,7 @@ def process_directory(
                                 static_split,
                                 markdown_format,
                                 aggregate_whitespaces,
+                                alignment_model_name,
                             )
                             if verbose:
                                 print(
@@ -247,6 +366,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Use multilingual model (xx_sent_ud_sm) for sentence splitting",
     )
+    parser.add_argument(
+        "--use-alignment-embeddings",
+        action="store_true",
+        help="Use embeddings-based alignment instead of naive alignment",
+    )
+    parser.add_argument(
+        "--alignment-model-name",
+        default="distiluse-base-multilingual-cased-v2",
+        help="Model name for embeddings-based alignment (default: distiluse-base-multilingual-cased-v2)",
+    )
     args = parser.parse_args()
 
     if not args.use_multilingual:
@@ -263,4 +392,5 @@ if __name__ == "__main__":
         args.markdown_format,
         args.aggregate_whitespaces,
         args.verbose,
+        args.alignment_model_name if args.use_alignment_embeddings else None,
     )
