@@ -17,10 +17,13 @@ class SentenceAlignmentError(Exception):
         self.difference = difference
 
 
-ES = "es"
-VA = "va"
 nlp = {}
-
+language2name = {
+    "es": "es_dep_news_trf",
+    "va": "ca_core_news_trf",
+    "ca": "ca_core_news_trf",
+    "en": "en_core_web_trf",
+}
 
 def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
     """Preprocess text based on markdown format."""
@@ -59,6 +62,8 @@ def split_into_sentences(
 ):
     """Tokenize text into sentences using spaCy."""
     text = preprocess_text(text, markdown_format, aggregate_whitespaces)
+    if language not in nlp:
+        raise ValueError(f"Language '{language}' is not configured.")
     doc = nlp[language](text)
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
@@ -81,7 +86,7 @@ def align_sentences(sentences0, sentences1):
     if len(sentences0) != len(sentences1):
         difference = abs(len(sentences0) - len(sentences1))
         raise SentenceAlignmentError(
-            f"Sentence count mismatch: Spanish: {len(sentences0)}, Valencian: {len(sentences1)}",
+            f"Sentence count mismatch: Language0: {len(sentences0)}, Language1: {len(sentences1)}",
             difference,
         )
     return list(zip(sentences0, sentences1))
@@ -208,52 +213,54 @@ def dump_sentences(sentences, output_file):
 
 
 def main(
-    valencian_file,
-    spanish_file,
+    file0,
+    file1,
     output_file,
-    output_valencian_file,
-    output_spanish_file,
+    output_file0,
+    output_file1,
+    lang0,
+    lang1,
     dump_sentences_enabled=True,
     static_split=False,
     markdown_format=False,
     aggregate_whitespaces=False,
     alignment_model_name=None,
 ):
-    with open(spanish_file, "r", encoding="utf-8") as f:
-        spanish_text = f.read()
-    with open(valencian_file, "r", encoding="utf-8") as f:
-        valencian_text = f.read()
+    with open(file0, "r", encoding="utf-8") as f:
+        text0 = f.read()
+    with open(file1, "r", encoding="utf-8") as f:
+        text1 = f.read()
 
     split = split_into_sentences if not static_split else static_split_into_sentences
 
-    spanish_sentences = split(
-        spanish_text,
-        ES,
+    sentences0 = split(
+        text0,
+        lang0,
         markdown_format,
         aggregate_whitespaces,
     )
-    valencian_sentences = split(
-        valencian_text,
-        VA,
+    sentences1 = split(
+        text1,
+        lang1,
         markdown_format,
         aggregate_whitespaces,
     )
 
     # Dump split sentences to separate files if enabled
     if dump_sentences_enabled:
-        dump_sentences(spanish_sentences, output_spanish_file)
-        dump_sentences(valencian_sentences, output_valencian_file)
+        dump_sentences(sentences0, output_file0)
+        dump_sentences(sentences1, output_file1)
 
     if alignment_model_name is None:
-        aligned = align_sentences(valencian_sentences, spanish_sentences)
+        aligned = align_sentences(sentences0, sentences1)
     else:
         aligned = align_sentences_with_embeddings(
-            valencian_sentences, spanish_sentences, alignment_model_name
+            sentences0, sentences1, alignment_model_name
         )
 
     with open(output_file, "w", encoding="utf-8") as out:
         json.dump(
-            [{"valencian": val, "spanish": spa} for val, spa in aligned],
+            [{lang0: s0, lang1: s1} for s0, s1 in aligned],
             out,
             ensure_ascii=False,
             indent=4,
@@ -263,6 +270,8 @@ def main(
 def process_directory(
     input_dir,
     output_dir,
+    lang0,
+    lang1,
     dump_sentences_enabled=True,
     static_split=False,
     markdown_format=False,
@@ -270,45 +279,47 @@ def process_directory(
     verbose=True,
     alignment_model_name=None,
 ):
-    """Process input directory recursively, aligning files in 'va/' and 'es/' subdirectories."""
+    """Process input directory recursively, aligning files in 'lang0/' and 'lang1/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
-        if "va" in dirs and "es" in dirs:
-            va_dir = os.path.join(root, "va")
-            es_dir = os.path.join(root, "es")
+        if lang0 in dirs and lang1 in dirs:
+            lang0_dir = os.path.join(root, lang0)
+            lang1_dir = os.path.join(root, lang1)
 
             pivot_dir = root.replace(input_dir, output_dir)
-            va_sentences_dir = os.path.join(pivot_dir, "va")
-            es_sentences_dir = os.path.join(pivot_dir, "es")
+            lang0_sentences_dir = os.path.join(pivot_dir, lang0)
+            lang1_sentences_dir = os.path.join(pivot_dir, lang1)
             aligned_dir = os.path.join(pivot_dir, "aligned")
 
-            for dirpath, _, filenames in os.walk(va_dir):
-                for va_file in filenames:
-                    va_file_path = os.path.join(dirpath, va_file)
-                    relative_path = os.path.relpath(va_file_path, va_dir)
-                    es_file_path = os.path.join(es_dir, relative_path)
+            for dirpath, _, filenames in os.walk(lang0_dir):
+                for lang0_file in filenames:
+                    lang0_file_path = os.path.join(dirpath, lang0_file)
+                    relative_path = os.path.relpath(lang0_file_path, lang0_dir)
+                    lang1_file_path = os.path.join(lang1_dir, relative_path)
 
                     aligned_file_path = os.path.join(
                         aligned_dir, os.path.splitext(relative_path)[0] + ".json"
                     )
-                    va_sentences_path = os.path.join(va_sentences_dir, relative_path)
-                    es_sentences_path = os.path.join(es_sentences_dir, relative_path)
+                    lang0_sentences_path = os.path.join(lang0_sentences_dir, relative_path)
+                    lang1_sentences_path = os.path.join(lang1_sentences_dir, relative_path)
 
-                    if os.path.isfile(es_file_path):
+                    if os.path.isfile(lang1_file_path):
                         os.makedirs(os.path.dirname(aligned_file_path), exist_ok=True)
                         if dump_sentences_enabled:
                             os.makedirs(
-                                os.path.dirname(va_sentences_path), exist_ok=True
+                                os.path.dirname(lang0_sentences_path), exist_ok=True
                             )
                             os.makedirs(
-                                os.path.dirname(es_sentences_path), exist_ok=True
+                                os.path.dirname(lang1_sentences_path), exist_ok=True
                             )
                         try:
                             main(
-                                va_file_path,
-                                es_file_path,
+                                lang0_file_path,
+                                lang1_file_path,
                                 aligned_file_path,
-                                va_sentences_path,
-                                es_sentences_path,
+                                lang0_sentences_path,
+                                lang1_sentences_path,
+                                lang0,
+                                lang1,
                                 dump_sentences_enabled,
                                 static_split,
                                 markdown_format,
@@ -317,14 +328,14 @@ def process_directory(
                             )
                             if verbose:
                                 print(
-                                    f"Successfully aligned {va_file_path} and {es_file_path}: saved to {aligned_file_path}"
+                                    f"Successfully aligned {lang0_file_path} and {lang1_file_path}: saved to {aligned_file_path}"
                                 )
                             else:
                                 print("✅", end="", flush=True)
                         except SentenceAlignmentError as e:
                             if verbose:
                                 print(
-                                    f"Error aligning {va_file_path} and {es_file_path}: {e}"
+                                    f"Error aligning {lang0_file_path} and {lang1_file_path}: {e}"
                                 )
                             elif e.difference == 1:
                                 print("🟨", end="", flush=True)
@@ -336,6 +347,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_dir", help="Path to input directory")
     parser.add_argument("output_dir", help="Path to output directory")
+    parser.add_argument("--lang0", default="va", help="Language code for the first language (default: va)")
+    parser.add_argument("--lang1", default="es", help="Language code for the second language (default: es)")
     parser.add_argument(
         "--disable-dump",
         action="store_true",
@@ -379,14 +392,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if not args.use_multilingual:
-        nlp[ES] = spacy.load("es_dep_news_trf")  # Load Spanish tokenizer
-        nlp[VA] = spacy.load("ca_core_news_trf")  # Load Valencian tokenizer
+        nlp[args.lang0] = spacy.load(language2name[args.lang0])  # Load tokenizer for lang0
+        nlp[args.lang1] = spacy.load(language2name[args.lang1])  # Load tokenizer for lang1
     else:
-        nlp[ES] = nlp[VA] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
+        nlp[args.lang0] = nlp[args.lang1] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
 
     process_directory(
         args.input_dir,
         args.output_dir,
+        args.lang0,
+        args.lang1,
         not args.disable_dump,
         args.static_split,
         args.markdown_format,
