@@ -278,6 +278,7 @@ def process_directory(
     aggregate_whitespaces=False,
     verbose=True,
     alignment_model_name=None,
+    skip_aligned=False,
 ):
     """Process input directory recursively, aligning files in 'lang0/' and 'lang1/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -301,6 +302,13 @@ def process_directory(
                     )
                     lang0_sentences_path = os.path.join(lang0_sentences_dir, relative_path)
                     lang1_sentences_path = os.path.join(lang1_sentences_dir, relative_path)
+
+                    if skip_aligned and os.path.isfile(aligned_file_path):
+                        if verbose:
+                            print(f"Skipping already aligned file: {aligned_file_path}")
+                        else:
+                            print("⏩", end="", flush=True)
+                        continue
 
                     if os.path.isfile(lang1_file_path):
                         os.makedirs(os.path.dirname(aligned_file_path), exist_ok=True)
@@ -389,6 +397,11 @@ if __name__ == "__main__":
         default="distiluse-base-multilingual-cased-v2",
         help="Model name for embeddings-based alignment (default: distiluse-base-multilingual-cased-v2)",
     )
+    parser.add_argument(
+        "--skip-aligned",
+        action="store_true",
+        help="Skip already aligned files",
+    )
     args = parser.parse_args()
 
     if not args.use_multilingual:
@@ -408,4 +421,5 @@ if __name__ == "__main__":
         args.aggregate_whitespaces,
         args.verbose,
         args.alignment_model_name if args.use_alignment_embeddings else None,
+        args.skip_aligned,
     )
