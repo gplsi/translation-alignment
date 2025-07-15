@@ -28,7 +28,7 @@ def process_directory(input_dir, output_dir, transform_function, verbose=False, 
                 content = infile.read()
             transformed_content = transform_function(content)
 
-            if not content.strip() and not keep_empty:
+            if not transformed_content.strip() and not keep_empty:
                 if verbose:
                     print(f"Skipping empty file: {input_file_path}")
                 continue
