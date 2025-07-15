@@ -50,7 +50,7 @@ def filter_items(content, threshold=0.67, min_length=0, verbose=False):
             case 9:
                 print("9️⃣", end=" ", flush=True)
             case 10:
-                print("🔟", end=" ", flush=True)
+                print("🔟", end="", flush=True)
             case _:
                 print(f"🟨", end="", flush=True)
     output = json.dumps(filtered_data, ensure_ascii=False, indent=4)
