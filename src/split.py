@@ -4,9 +4,27 @@ import os
 import json
 import re
 import markdown
+import logging
+import sys
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
+
+def configure_logging(verbose):
+    """Configure logging to log to stdout or file based on verbosity."""
+    if verbose:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            stream=sys.stdout,
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            filename="script.log",
+            filemode="w",
+        )
 
 
 class SentenceAlignmentError(Exception):
@@ -27,6 +45,7 @@ language2name = {
 
 def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
     """Preprocess text based on markdown format."""
+    logging.debug("Preprocessing text with markdown_format=%s, aggregate_whitespaces=%s", markdown_format, aggregate_whitespaces)
 
     if aggregate_whitespaces:
         text = re.sub(r"\s+", " ", text).strip()
@@ -61,6 +80,7 @@ def split_into_sentences(
     text, language, markdown_format=False, aggregate_whitespaces=False
 ):
     """Tokenize text into sentences using spaCy."""
+    logging.info("Splitting text into sentences for language: %s", language)
     text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     if language not in nlp:
         raise ValueError(f"Language '{language}' is not configured.")
@@ -72,6 +92,7 @@ def static_split_into_sentences(
     text, language, markdown_format=False, aggregate_whitespaces=False
 ):
     """Static function to split text into sentences for testing purposes."""
+    logging.info("Using static sentence splitting for language: %s", language)
     text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     return [
         sentence.strip() + "."  # Add a period to each sentence for consistency
@@ -83,6 +104,7 @@ def static_split_into_sentences(
 
 def align_sentences(sentences0, sentences1):
     """Naive alignment: 1-to-1, truncate to shortest."""
+    logging.info("Performing naive alignment of sentences")
     if len(sentences0) != len(sentences1):
         difference = abs(len(sentences0) - len(sentences1))
         raise SentenceAlignmentError(
@@ -111,6 +133,7 @@ def align_sentences_with_embeddings(
     attempts=5,
 ):
     """Align sentences using embeddings and cosine similarity."""
+    logging.info("Performing alignment with embeddings using model: %s", model_name)
 
     if not sentences0 or not sentences1:
         raise SentenceAlignmentError(
@@ -207,6 +230,7 @@ def align_sentences_with_embeddings(
 
 def dump_sentences(sentences, output_file):
     """Dump sentences to a file."""
+    logging.info("Dumping sentences to file: %s", output_file)
     with open(output_file, "w", encoding="utf-8") as f:
         for sentence in sentences:
             f.write(sentence + "\n")
@@ -214,6 +238,7 @@ def dump_sentences(sentences, output_file):
 
 def dump_aligned_sentences_jsonl(aligned, output_file, lang0, lang1):
     """Dump aligned sentences to a .jsonl file."""
+    logging.info("Dumping aligned sentences to JSONL file: %s", output_file)
     with open(output_file, "w", encoding="utf-8") as out:
         for s0, s1 in aligned:
             out.write(json.dumps({lang0: s0, lang1: s1}, ensure_ascii=False) + "\n")
@@ -221,6 +246,7 @@ def dump_aligned_sentences_jsonl(aligned, output_file, lang0, lang1):
 
 def dump_aligned_sentences_json(aligned, output_file, lang0, lang1):
     """Dump aligned sentences to a .json file."""
+    logging.info("Dumping aligned sentences to JSON file: %s", output_file)
     with open(output_file, "w", encoding="utf-8") as out:
         json.dump(
             [{lang0: s0, lang1: s1} for s0, s1 in aligned],
@@ -245,6 +271,7 @@ def main(
     alignment_model_name=None,
     deprecated_json=False,
 ):
+    logging.info("Processing files: %s and %s", file0, file1)
     with open(file0, "r", encoding="utf-8") as f:
         text0 = f.read()
     with open(file1, "r", encoding="utf-8") as f:
@@ -292,14 +319,15 @@ def process_directory(
     static_split=False,
     markdown_format=False,
     aggregate_whitespaces=False,
-    verbose=True,
     alignment_model_name=None,
     skip_aligned=False,
     deprecated_json=False,
 ):
     """Process input directory recursively, aligning files in 'lang0/' and 'lang1/' subdirectories."""
+    logging.info("Processing directory: %s", input_dir)
     for root, dirs, files in os.walk(input_dir):
         if lang0 in dirs and lang1 in dirs:
+            logging.info("Found language directories: %s and %s", lang0, lang1)
             lang0_dir = os.path.join(root, lang0)
             lang1_dir = os.path.join(root, lang1)
 
@@ -310,6 +338,7 @@ def process_directory(
 
             for dirpath, _, filenames in os.walk(lang0_dir):
                 for lang0_file in filenames:
+                    logging.debug("Processing file: %s", lang0_file)
                     lang0_file_path = os.path.join(dirpath, lang0_file)
                     relative_path = os.path.relpath(lang0_file_path, lang0_dir)
                     lang1_file_path = os.path.join(lang1_dir, relative_path)
@@ -321,10 +350,8 @@ def process_directory(
                     lang1_sentences_path = os.path.join(lang1_sentences_dir, relative_path)
 
                     if skip_aligned and os.path.isfile(aligned_file_path):
-                        if verbose:
-                            print(f"Skipping already aligned file: {aligned_file_path}")
-                        else:
-                            print("⏩", end="", flush=True)
+                        logging.info("Skipping already aligned file: %s", aligned_file_path)
+                        print("⏩", end="", flush=True)
                         continue
 
                     if os.path.isfile(lang1_file_path):
@@ -352,18 +379,21 @@ def process_directory(
                                 alignment_model_name,
                                 deprecated_json,
                             )
-                            if verbose:
-                                print(
-                                    f"Successfully aligned {lang0_file_path} and {lang1_file_path}: saved to {aligned_file_path}"
-                                )
-                            else:
-                                print("✅", end="", flush=True)
+                            logging.info(
+                                "Successfully aligned %s and %s: saved to %s",
+                                lang0_file_path,
+                                lang1_file_path,
+                                aligned_file_path,
+                            )
+                            print("✅", end="", flush=True)
                         except SentenceAlignmentError as e:
-                            if verbose:
-                                print(
-                                    f"Error aligning {lang0_file_path} and {lang1_file_path}: {e}"
-                                )
-                            elif e.difference == 1:
+                            logging.error(
+                                "Error aligning %s and %s: %s",
+                                lang0_file_path,
+                                lang1_file_path,
+                                e,
+                            )
+                            if e.difference == 1:
                                 print("🟨", end="", flush=True)
                             else:
                                 print("❌", end="", flush=True)
@@ -427,10 +457,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    configure_logging(args.verbose)
+    logging.info("Starting sentence alignment script")
+
     if not args.use_multilingual:
+        logging.info("Loading spaCy models for languages: %s, %s", args.lang0, args.lang1)
         nlp[args.lang0] = spacy.load(language2name[args.lang0])  # Load tokenizer for lang0
         nlp[args.lang1] = spacy.load(language2name[args.lang1])  # Load tokenizer for lang1
     else:
+        logging.info("Using multilingual spaCy model")
         nlp[args.lang0] = nlp[args.lang1] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
 
     process_directory(
@@ -442,7 +477,6 @@ if __name__ == "__main__":
         args.static_split,
         args.markdown_format,
         args.aggregate_whitespaces,
-        args.verbose,
         args.alignment_model_name if args.use_alignment_embeddings else None,
         args.skip_aligned,
         args.deprecated_json,
