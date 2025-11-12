@@ -212,6 +212,24 @@ def dump_sentences(sentences, output_file):
             f.write(sentence + "\n")
 
 
+def dump_aligned_sentences_jsonl(aligned, output_file, lang0, lang1):
+    """Dump aligned sentences to a .jsonl file."""
+    with open(output_file, "w", encoding="utf-8") as out:
+        for s0, s1 in aligned:
+            out.write(json.dumps({lang0: s0, lang1: s1}, ensure_ascii=False) + "\n")
+
+
+def dump_aligned_sentences_json(aligned, output_file, lang0, lang1):
+    """Dump aligned sentences to a .json file."""
+    with open(output_file, "w", encoding="utf-8") as out:
+        json.dump(
+            [{lang0: s0, lang1: s1} for s0, s1 in aligned],
+            out,
+            ensure_ascii=False,
+            indent=4,
+        )
+
+
 def main(
     file0,
     file1,
@@ -225,6 +243,7 @@ def main(
     markdown_format=False,
     aggregate_whitespaces=False,
     alignment_model_name=None,
+    deprecated_json=False,
 ):
     with open(file0, "r", encoding="utf-8") as f:
         text0 = f.read()
@@ -258,13 +277,10 @@ def main(
             sentences0, sentences1, alignment_model_name
         )
 
-    with open(output_file, "w", encoding="utf-8") as out:
-        json.dump(
-            [{lang0: s0, lang1: s1} for s0, s1 in aligned],
-            out,
-            ensure_ascii=False,
-            indent=4,
-        )
+    if deprecated_json:
+        dump_aligned_sentences_json(aligned, output_file, lang0, lang1)
+    else:
+        dump_aligned_sentences_jsonl(aligned, output_file, lang0, lang1)
 
 
 def process_directory(
@@ -279,6 +295,7 @@ def process_directory(
     verbose=True,
     alignment_model_name=None,
     skip_aligned=False,
+    deprecated_json=False,
 ):
     """Process input directory recursively, aligning files in 'lang0/' and 'lang1/' subdirectories."""
     for root, dirs, files in os.walk(input_dir):
@@ -333,6 +350,7 @@ def process_directory(
                                 markdown_format,
                                 aggregate_whitespaces,
                                 alignment_model_name,
+                                deprecated_json,
                             )
                             if verbose:
                                 print(
@@ -402,6 +420,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip already aligned files",
     )
+    parser.add_argument(
+        "--deprecated-json",
+        action="store_true",
+        help="Use deprecated JSON format instead of JSONL",
+    )
     args = parser.parse_args()
 
     if not args.use_multilingual:
@@ -422,4 +445,5 @@ if __name__ == "__main__":
         args.verbose,
         args.alignment_model_name if args.use_alignment_embeddings else None,
         args.skip_aligned,
+        args.deprecated_json,
     )

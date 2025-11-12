@@ -8,7 +8,7 @@ This project provides a tool for aligning sentences between two languages (e.g.,
 - **Sentence Splitting**: Uses spaCy or a static method for splitting text into sentences.
 - **Sentence Alignment**: Supports naive 1-to-1 alignment or embeddings-based alignment using SentenceTransformers.
 - **Batch Processing**: Processes directories recursively, aligning files in `<lang0>/` and `<lang1>/` subdirectories.
-- **Output**: Saves aligned sentences in JSON format and optionally dumps split sentences to separate files.
+- **Output**: Saves aligned sentences in JSONL format (default) or JSON format (with `--deprecated-json`) and optionally dumps split sentences to separate files.
 
 ## Requirements
 
@@ -18,6 +18,7 @@ This project provides a tool for aligning sentences between two languages (e.g.,
   - `markdown`
   - `beautifulsoup4`
   - `sentence-transformers`
+  - `pandas`
 
 Install the dependencies using:
 ```bash
@@ -31,7 +32,7 @@ pip install -r requirements.txt
 Run the script with the following arguments:
 
 ```bash
-python split.py <input_dir> <output_dir> [options]
+python -m src.split <input_dir> <output_dir> [options]
 ```
 
 #### Positional Arguments:
@@ -50,13 +51,14 @@ python split.py <input_dir> <output_dir> [options]
 - `--use-alignment-embeddings`: Use embeddings-based alignment instead of naive alignment.
 - `--alignment-model-name`: Specify the model name for embeddings-based alignment (default: `distiluse-base-multilingual-cased-v2`).
 - `--skip-aligned`: Skip processing files that already have aligned output in `output_dir`.
+- `--deprecated-json`: Save aligned sentences in JSON format instead of JSONL format.
 
 ### Example
 
 Align files in the `input` directory and save results to the `output` directory:
 
 ```bash
-python split.py input/ output/ --markdown-format --use-alignment-embeddings
+python -m src.split input/ output/ --markdown-format --use-alignment-embeddings
 ```
 
 ### Directory Structure
@@ -82,21 +84,17 @@ output/
 │   ├── file1.txt
 │   └── file2.txt
 ├── aligned/
-│   ├── file1.json
-│   └── file2.json
+│   ├── file1.jsonl
+│   └── file2.jsonl
 ```
 
 ### Output Format
 
-Aligned sentences are saved in JSON format:
-```json
-[
-    {
-        "lang0": "Sentence in language 0.",
-        "lang1": "Sentence in language 1."
-    },
-    ...
-]
+Aligned sentences are saved in JSONL format (default) or JSON format (with `--deprecated-json`):
+```jsonl
+{"lang0": "Sentence in language 0.", "lang1": "Sentence in language 1."}
+{"lang0": "Another sentence in language 0.", "lang1": "Another sentence in language 1."}
+...
 ```
 
 ## Notes
