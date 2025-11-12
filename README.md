@@ -39,6 +39,8 @@ python split.py <input_dir> <output_dir> [options]
 - `output_dir`: Path to the output directory where results will be saved.
 
 #### Optional Arguments:
+- `--lang0`: Specify the language code for the `<lang0>` subdirectory (default: `va`).
+- `--lang1`: Specify the language code for the `<lang1>` subdirectory (default: `es`).
 - `--disable-dump`: Disable dumping of split sentences to separate files.
 - `--static-split`: Use static sentence splitting instead of spaCy.
 - `--markdown-format`: Enable Markdown format preprocessing.
@@ -47,6 +49,7 @@ python split.py <input_dir> <output_dir> [options]
 - `--use-multilingual`: Use a multilingual spaCy model (`xx_sent_ud_sm`) for sentence splitting.
 - `--use-alignment-embeddings`: Use embeddings-based alignment instead of naive alignment.
 - `--alignment-model-name`: Specify the model name for embeddings-based alignment (default: `distiluse-base-multilingual-cased-v2`).
+- `--skip-aligned`: Skip processing files that already have aligned output in `output_dir`.
 
 ### Example
 
