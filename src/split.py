@@ -146,7 +146,7 @@ def align_sentences_with_embeddings(
     @lru_cache(maxsize=6)
     def get_embedding(group, pivot):
         """Get the embedding for a sentence, caching results."""
-        return model.encode(sentences[group][pivot], convert_to_tensor=True)
+        return model.encode(sentences[group][pivot], convert_to_tensor=True, show_progress_bar=False)
 
     pivot0 = 0
     pivot1 = 0
@@ -481,3 +481,4 @@ if __name__ == "__main__":
         args.skip_aligned,
         args.deprecated_json,
     )
+    logging.info("Sentence alignment script completed")
