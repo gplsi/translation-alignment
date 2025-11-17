@@ -1,0 +1,1 @@
+python -m src.split "data/UJI (plain)/" "output/UJI (plain)/" --lang0 va --lang1 en --use-alignment-embeddings --skip-aligned --disable-dump
