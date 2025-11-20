@@ -344,7 +344,7 @@ def process_directory(
                     lang1_file_path = os.path.join(lang1_dir, relative_path)
 
                     aligned_file_path = os.path.join(
-                        aligned_dir, os.path.splitext(relative_path)[0] + ".json"
+                        aligned_dir, os.path.splitext(relative_path)[0] + (".json" if deprecated_json else ".jsonl")
                     )
                     lang0_sentences_path = os.path.join(lang0_sentences_dir, relative_path)
                     lang1_sentences_path = os.path.join(lang1_sentences_dir, relative_path)
