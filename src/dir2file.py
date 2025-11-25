@@ -21,14 +21,17 @@ def explore_directory_to_dataframe(directory, lang0, lang1, deprecated_json=Fals
                 })
     return pd.DataFrame(data)
 
-def inspect_and_dump(df, output_path):
+def inspect_and_dump(df, output_path, output_format):
     print("DataFrame Statistics:")
     print(df.describe(include='all'))
     print("\nDataFrame Head:")
     print(df.head())
     
     if output_path:
-        df.to_csv(output_path, index=False, sep='\t')
+        if output_format == 'tsv':
+            df.to_csv(output_path, index=False, sep='\t')
+        elif output_format == 'jsonl':
+            df.to_json(output_path, orient='records', lines=True, force_ascii=False)
         print(f"DataFrame saved to {output_path}")
 
 if __name__ == "__main__":
@@ -39,12 +42,13 @@ if __name__ == "__main__":
     parser.add_argument("--lang0", default="va", help="Language code for the first language (default: va)")
     parser.add_argument("--lang1", default="es", help="Language code for the second language (default: es)")
     parser.add_argument("--deprecated-json", action='store_true', help="Use the old JSON format instead of JSONL.")
+    parser.add_argument("--format", choices=['tsv', 'jsonl'], default='tsv', help="Output format: tsv or jsonl (default: tsv).")
     args = parser.parse_args()
 
     if args.add_partitions:
         for file in Path(args.directory).iterdir():
             df = explore_directory_to_dataframe(str(file), args.lang0, args.lang1, args.deprecated_json)
-            inspect_and_dump(df, f"{file.stem}_{args.output}")
+            inspect_and_dump(df, f"{file.stem}_{args.output}", args.format)
     else:
         df = explore_directory_to_dataframe(args.directory, args.lang0, args.lang1, args.deprecated_json)
-        inspect_and_dump(df, args.output)
+        inspect_and_dump(df, args.output, args.format)
