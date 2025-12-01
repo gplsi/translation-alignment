@@ -101,6 +101,12 @@ def static_split_into_sentences(
         if sentence.strip()
     ]
 
+def static_split_into_paragraphs(text, language, markdown_format=False, aggregate_whitespaces=False):
+    """Static function to split text into paragraphs for testing purposes."""
+    logging.info("Using static paragraph splitting")
+    text = preprocess_text(text, markdown_format, aggregate_whitespaces)
+    return [paragraph.strip() for paragraph in text.split("\n") if paragraph.strip()]
+
 
 def align_sentences(sentences0, sentences1):
     """Naive alignment: 1-to-1, truncate to shortest."""
@@ -270,6 +276,7 @@ def main(
     aggregate_whitespaces=False,
     alignment_model_name=None,
     deprecated_json=False,
+    target="sentence",
 ):
     logging.info("Processing files: %s and %s", file0, file1)
     with open(file0, "r", encoding="utf-8") as f:
@@ -277,7 +284,12 @@ def main(
     with open(file1, "r", encoding="utf-8") as f:
         text1 = f.read()
 
-    split = split_into_sentences if not static_split else static_split_into_sentences
+    if target == "sentence":
+        split = split_into_sentences if not static_split else static_split_into_sentences
+    elif target == "paragraph" and static_split:
+        split = static_split_into_paragraphs 
+    else:
+        raise ValueError(f"Invalid combination of (target, static-split?: ({target}, {static_split}).")
 
     sentences0 = split(
         text0,
@@ -322,6 +334,7 @@ def process_directory(
     alignment_model_name=None,
     skip_aligned=False,
     deprecated_json=False,
+    target="sentence",
 ):
     """Process input directory recursively, aligning files in 'lang0/' and 'lang1/' subdirectories."""
     logging.info("Processing directory: %s", input_dir)
@@ -378,6 +391,7 @@ def process_directory(
                                 aggregate_whitespaces,
                                 alignment_model_name,
                                 deprecated_json,
+                                target,
                             )
                             logging.info(
                                 "Successfully aligned %s and %s: saved to %s",
@@ -455,18 +469,25 @@ if __name__ == "__main__":
         action="store_true",
         help="Use deprecated JSON format instead of JSONL",
     )
+    parser.add_argument(
+        "--target",
+        choices=["sentence", "paragraph"],
+        default="sentence",
+        help="Target for splitting: 'sentence' or 'paragraph' (default: sentence)",
+    )
     args = parser.parse_args()
 
     configure_logging(args.verbose)
     logging.info("Starting sentence alignment script")
 
-    if not args.use_multilingual:
-        logging.info("Loading spaCy models for languages: %s, %s", args.lang0, args.lang1)
-        nlp[args.lang0] = spacy.load(language2name[args.lang0])  # Load tokenizer for lang0
-        nlp[args.lang1] = spacy.load(language2name[args.lang1])  # Load tokenizer for lang1
-    else:
-        logging.info("Using multilingual spaCy model")
-        nlp[args.lang0] = nlp[args.lang1] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
+    if not args.static_split:
+        if not args.use_multilingual:
+            logging.info("Loading spaCy models for languages: %s, %s", args.lang0, args.lang1)
+            nlp[args.lang0] = spacy.load(language2name[args.lang0])  # Load tokenizer for lang0
+            nlp[args.lang1] = spacy.load(language2name[args.lang1])  # Load tokenizer for lang1
+        else:
+            logging.info("Using multilingual spaCy model")
+            nlp[args.lang0] = nlp[args.lang1] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
 
     process_directory(
         args.input_dir,
@@ -480,5 +501,6 @@ if __name__ == "__main__":
         args.alignment_model_name if args.use_alignment_embeddings else None,
         args.skip_aligned,
         args.deprecated_json,
+        args.target,
     )
-    logging.info("Sentence alignment script completed")
+    logging.info(f"{args.target.title()} alignment script completed")

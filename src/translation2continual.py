@@ -30,7 +30,7 @@ def process_jsonl_files(jsonl_files, is_json):
                     for lang, sentence in json_obj.items():
                         lang_name = get_language_name(lang)
                         sentences.append(f"{lang_name}: {sentence}")
-                    outfile.write(json.dumps("\n".join(sentences)) + "\n")
+                    outfile.write(json.dumps({"text": "\n".join(sentences)}) + "\n")
 
 def get_language_name(lang_code):
     """Map language codes to their full names."""
