@@ -107,6 +107,12 @@ def static_split_into_paragraphs(text, language, markdown_format=False, aggregat
     text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     return [paragraph.strip() for paragraph in text.split("\n") if paragraph.strip()]
 
+def static_no_split(text, language, markdown_format=False, aggregate_whitespaces=False):
+    """Static function that returns the entire text as a single 'sentence'."""
+    logging.info("Using static no-split (entire text as one sentence)")
+    text = preprocess_text(text, markdown_format, aggregate_whitespaces)
+    return [text.strip()] if text.strip() else []
+
 
 def align_sentences(sentences0, sentences1):
     """Naive alignment: 1-to-1, truncate to shortest."""
@@ -278,6 +284,9 @@ def main(
     deprecated_json=False,
     target="sentence",
 ):
+    if target == "document" and alignment_model_name is not None:
+        logging.warning("Embeddings-based alignment is not recommended for document-level alignment.")
+
     logging.info("Processing files: %s and %s", file0, file1)
     with open(file0, "r", encoding="utf-8") as f:
         text0 = f.read()
@@ -288,8 +297,10 @@ def main(
         split = split_into_sentences if not static_split else static_split_into_sentences
     elif target == "paragraph" and static_split:
         split = static_split_into_paragraphs 
+    elif target == "document" and static_split:
+        split = static_no_split
     else:
-        raise ValueError(f"Invalid combination of (target, static-split?: ({target}, {static_split}).")
+        raise ValueError(f"Invalid combination of (target, static-split): ({target}, {static_split}).")
 
     sentences0 = split(
         text0,
@@ -471,9 +482,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--target",
-        choices=["sentence", "paragraph"],
+        choices=["sentence", "paragraph", "document"],
         default="sentence",
-        help="Target for splitting: 'sentence' or 'paragraph' (default: sentence)",
+        help="Target for splitting: 'sentence', 'paragraph' or 'document' (default: sentence)",
     )
     args = parser.parse_args()
 
