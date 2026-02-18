@@ -37,7 +37,7 @@ def inspect_and_dump(df, output_path, output_format):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Explore a directory and process JSON or JSONL files into a DataFrame.")
     parser.add_argument("directory", type=str, help="Path to the directory to explore.")
-    parser.add_argument("output", type=str, help="Path to save the resulting DataFrame as a TSV file.", default=None)
+    parser.add_argument("--output", type=str, help="Path to save the resulting DataFrame as a TSV or JSONL file.", default=None)
     parser.add_argument("--add-partitions", action='store_true', help="Process files in chunks to manage memory usage.")
     parser.add_argument("--lang0", default="va", help="Language code for the first language (default: va)")
     parser.add_argument("--lang1", default="es", help="Language code for the second language (default: es)")
@@ -45,10 +45,17 @@ if __name__ == "__main__":
     parser.add_argument("--format", choices=['tsv', 'jsonl'], default='tsv', help="Output format: tsv or jsonl (default: tsv).")
     args = parser.parse_args()
 
+    if args.output is None:
+        output_path = Path(args.directory.rstrip('/'))
+        output_path = output_path.with_name(output_path.name + f".{args.format}")
+    else:
+        output_path = Path(args.output) 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     if args.add_partitions:
         for file in Path(args.directory).iterdir():
             df = explore_directory_to_dataframe(str(file), args.lang0, args.lang1, args.deprecated_json)
-            inspect_and_dump(df, f"{file.stem}_{args.output}", args.format)
+            inspect_and_dump(df, str(output_path.parent / f"{file.stem}_{output_path.name}"), args.format)
     else:
         df = explore_directory_to_dataframe(args.directory, args.lang0, args.lang1, args.deprecated_json)
-        inspect_and_dump(df, args.output, args.format)
+        inspect_and_dump(df, str(output_path), args.format)

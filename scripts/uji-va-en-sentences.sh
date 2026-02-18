@@ -1,5 +1,14 @@
-python -m src.split "data/UJI (plain)/" "output/UJI-VA-EN (plain)/" --lang0 va --lang1 en --use-alignment-embeddings --skip-aligned --disable-dump
+python -m src.split "data/UJI (plain)/" "output/UJI (plain)/va-en-sentence/" --lang0 va --lang1 en --use-alignment-embeddings --skip-aligned --disable-dump --target sentence --static-split
+if [ $? -ne 0 ]; then
+    exit 1
+fi
 
-python -m src.filter_items "output/UJI-VA-EN (plain)/" "output/UJI-VA-EN (plain aligned-and-filtered)" --lang0 va --lang1 en
+python -m src.filter_items "output/UJI (plain)/va-en-sentence/" --lang0 va --lang1 en --enable-length --enable-ner --verbose
+if [ $? -ne 0 ]; then
+    exit 1
+fi
 
-python -m src.dir2file "output/UJI-VA-EN (plain aligned-and-filtered)" va-en.jsonl --add-partitions --lang0 va --lang1 en --format jsonl
+python -m src.dir2file "output/UJI (plain)/va-en-sentence.length.ner" --lang0 va --lang1 en --format jsonl
+if [ $? -ne 0 ]; then
+    exit 1
+fi
