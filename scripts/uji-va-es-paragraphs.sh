@@ -5,7 +5,7 @@
 #SBATCH --partition=titan                              # Cluster partition to use
 #SBATCH --mem=32G                                      # Required RAM memory
 #SBATCH --nodes=1                                      # Number of nodes
-#SBATCH --cpus-per-task=4                              # Number of CPUs per task
+#SBATCH --cpus-per-task=1                              # Number of CPUs per task
 #SBATCH --time=24:00:00                                # Maximum execution time (HH:MM:SS)
 
 
