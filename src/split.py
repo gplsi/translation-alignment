@@ -514,4 +514,5 @@ if __name__ == "__main__":
         args.deprecated_json,
         args.target,
     )
+    print(f"{args.target.title()} alignment script completed")
     logging.info(f"{args.target.title()} alignment script completed")
