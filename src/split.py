@@ -10,9 +10,10 @@ import torch
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
+from pathlib import Path
 
 
-def configure_logging(verbose):
+def configure_logging(verbose, output_dir):
     """Configure logging to log to stdout or file based on verbosity."""
     if verbose:
         logging.basicConfig(
@@ -24,7 +25,7 @@ def configure_logging(verbose):
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
-            filename="script.log",
+            filename=Path(output_dir).with_suffix(".log"),
             filemode="w",
         )
 
@@ -571,7 +572,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    configure_logging(args.verbose)
+    configure_logging(args.verbose, args.output_dir)
     logging.info("Starting sentence alignment script")
 
     if not args.static_split:
