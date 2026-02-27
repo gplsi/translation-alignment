@@ -6,9 +6,11 @@ import re
 import markdown
 import logging
 import sys
+import torch
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
+
 
 def configure_logging(verbose):
     """Configure logging to log to stdout or file based on verbosity."""
@@ -43,9 +45,14 @@ language2name = {
     "en": "en_core_web_trf",
 }
 
+
 def preprocess_text(text, markdown_format=False, aggregate_whitespaces=False):
     """Preprocess text based on markdown format."""
-    logging.debug("Preprocessing text with markdown_format=%s, aggregate_whitespaces=%s", markdown_format, aggregate_whitespaces)
+    logging.debug(
+        "Preprocessing text with markdown_format=%s, aggregate_whitespaces=%s",
+        markdown_format,
+        aggregate_whitespaces,
+    )
 
     if aggregate_whitespaces:
         text = re.sub(r"\s+", " ", text).strip()
@@ -101,11 +108,15 @@ def static_split_into_sentences(
         if sentence.strip()
     ]
 
-def static_split_into_paragraphs(text, language, markdown_format=False, aggregate_whitespaces=False):
+
+def static_split_into_paragraphs(
+    text, language, markdown_format=False, aggregate_whitespaces=False
+):
     """Static function to split text into paragraphs for testing purposes."""
     logging.info("Using static paragraph splitting")
     text = preprocess_text(text, markdown_format, aggregate_whitespaces)
     return [paragraph.strip() for paragraph in text.split("\n") if paragraph.strip()]
+
 
 def static_no_split(text, language, markdown_format=False, aggregate_whitespaces=False):
     """Static function that returns the entire text as a single 'sentence'."""
@@ -127,10 +138,14 @@ def align_sentences(sentences0, sentences1):
 
 
 @lru_cache(maxsize=1)
-def get_model(model_name):
-    """Get the SentenceTransformer model with caching."""
+def get_model(model_name, device="auto"):
+    """Get the SentenceTransformer model with caching and device selection."""
     try:
         model = SentenceTransformer(model_name)
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = model.to(device)
+        logging.info("Loaded alignment model '%s' on device: %s", model_name, device)
         return model
     except Exception as e:
         raise ValueError(f"Failed to load model '{model_name}': {e}")
@@ -140,43 +155,82 @@ def align_sentences_with_embeddings(
     sentences0,
     sentences1,
     model_name,
+    device="auto",
     threshold=0.7,
     loose=False,
     attempts=5,
 ):
-    """Align sentences using embeddings and cosine similarity."""
-    logging.info("Performing alignment with embeddings using model: %s", model_name)
+    """Align sentences using embeddings and cosine similarity. Automatically swaps
+    between GPU batching and CPU lazy-loading based on the requested device.
+    """
+    if device == "auto":
+        resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        resolved_device = device
+
+    logging.info(
+        "Performing alignment with embeddings using model: %s on %s",
+        model_name,
+        resolved_device.upper(),
+    )
 
     if not sentences0 or not sentences1:
         raise SentenceAlignmentError(
             "One or both sentence lists are empty.", len(sentences0) + len(sentences1)
         )
 
-    model = get_model(model_name)
-    sentences = [sentences0, sentences1]
+    model = get_model(model_name, resolved_device)
 
-    @lru_cache(maxsize=6)
-    def get_embedding(group, pivot):
-        """Get the embedding for a sentence, caching results."""
-        return model.encode(sentences[group][pivot], convert_to_tensor=True, show_progress_bar=False)
+    # --- SIMILARITY LOGIC BRANCHING ---
+    if resolved_device == "cuda":
+        # GPU Optimized: Pre-compute all embeddings in batches
+        logging.info(
+            "Encoding %d sentences for lang0 and %d for lang1 (Batched GPU)",
+            len(sentences0),
+            len(sentences1),
+        )
+        emb0 = model.encode(sentences0, convert_to_tensor=True, show_progress_bar=False)
+        emb1 = model.encode(sentences1, convert_to_tensor=True, show_progress_bar=False)
 
+        emb0 = emb0.to(device=resolved_device, dtype=torch.float32)
+        emb1 = emb1.to(device=resolved_device, dtype=torch.float32)
+
+        def get_sim(i0, i1):
+            v0 = emb0[i0].unsqueeze(0)
+            v1 = emb1[i1].unsqueeze(0)
+            return util.cos_sim(v0, v1).item()
+
+    else:
+        # CPU Optimized: Lazy-loading & LRU cache to save memory overhead
+        sentences = [sentences0, sentences1]
+
+        @lru_cache(maxsize=6)
+        def get_embedding(group, pivot):
+            return model.encode(
+                sentences[group][pivot], convert_to_tensor=True, show_progress_bar=False
+            )
+
+        def get_sim(i0, i1):
+            e0 = get_embedding(0, i0)
+            e1 = get_embedding(1, i1)
+            return util.cos_sim(e0, e1).item()
+
+    # --- ALIGNMENT LOOP ---
     pivot0 = 0
     pivot1 = 0
     aligned_sentences = []
 
     while pivot0 < len(sentences0) and pivot1 < len(sentences1):
-        embedding0 = get_embedding(0, pivot0)
-        embedding1 = get_embedding(1, pivot1)
-        similarity = util.cos_sim(embedding0, embedding1)
+        similarity = get_sim(pivot0, pivot1)
 
-        if similarity.item() >= threshold:
+        if similarity >= threshold:
             aligned_sentences.append((sentences0[pivot0], sentences1[pivot1]))
             pivot0 += 1
             pivot1 += 1
         else:
             similarities = [
                 (
-                    similarity.item(),
+                    similarity,
                     pivot0 + 1,
                     pivot1 + 1,
                     sentences0[pivot0],
@@ -185,17 +239,16 @@ def align_sentences_with_embeddings(
             ]
 
             if pivot0 + 1 < len(sentences0):
+                candidate0_similarity = get_sim(pivot0 + 1, pivot1)
                 candidate0 = sentences0[pivot0 + 1]
-                candidate0_embedding = get_embedding(0, pivot0 + 1)
-                candidate0_similarity = util.cos_sim(candidate0_embedding, embedding1)
-                if candidate0_similarity.item() >= threshold:
+                if candidate0_similarity >= threshold:
                     aligned_sentences.append((candidate0, sentences1[pivot1]))
                     pivot0 += 2
                     pivot1 += 1
                     continue
                 similarities.append(
                     (
-                        candidate0_similarity.item(),
+                        candidate0_similarity,
                         pivot0 + 2,
                         pivot1 + 1,
                         candidate0,
@@ -204,17 +257,16 @@ def align_sentences_with_embeddings(
                 )
 
             if pivot1 + 1 < len(sentences1):
+                candidate1_similarity = get_sim(pivot0, pivot1 + 1)
                 candidate1 = sentences1[pivot1 + 1]
-                candidate1_embedding = get_embedding(1, pivot1 + 1)
-                candidate1_similarity = util.cos_sim(embedding0, candidate1_embedding)
-                if candidate1_similarity.item() >= threshold:
+                if candidate1_similarity >= threshold:
                     aligned_sentences.append((sentences0[pivot0], candidate1))
                     pivot0 += 1
                     pivot1 += 2
                     continue
                 similarities.append(
                     (
-                        candidate1_similarity.item(),
+                        candidate1_similarity,
                         pivot0 + 1,
                         pivot1 + 2,
                         sentences0[pivot0],
@@ -281,11 +333,14 @@ def main(
     markdown_format=False,
     aggregate_whitespaces=False,
     alignment_model_name=None,
+    device="auto",
     deprecated_json=False,
     target="sentence",
 ):
     if target == "document" and alignment_model_name is not None:
-        logging.warning("Embeddings-based alignment is not recommended for document-level alignment.")
+        logging.warning(
+            "Embeddings-based alignment is not recommended for document-level alignment."
+        )
 
     logging.info("Processing files: %s and %s", file0, file1)
     with open(file0, "r", encoding="utf-8") as f:
@@ -294,13 +349,17 @@ def main(
         text1 = f.read()
 
     if target == "sentence":
-        split = split_into_sentences if not static_split else static_split_into_sentences
+        split = (
+            split_into_sentences if not static_split else static_split_into_sentences
+        )
     elif target == "paragraph" and static_split:
-        split = static_split_into_paragraphs 
+        split = static_split_into_paragraphs
     elif target == "document" and static_split:
         split = static_no_split
     else:
-        raise ValueError(f"Invalid combination of (target, static-split): ({target}, {static_split}).")
+        raise ValueError(
+            f"Invalid combination of (target, static-split): ({target}, {static_split})."
+        )
 
     sentences0 = split(
         text0,
@@ -324,7 +383,7 @@ def main(
         aligned = align_sentences(sentences0, sentences1)
     else:
         aligned = align_sentences_with_embeddings(
-            sentences0, sentences1, alignment_model_name
+            sentences0, sentences1, alignment_model_name, device=device
         )
 
     if deprecated_json:
@@ -343,6 +402,7 @@ def process_directory(
     markdown_format=False,
     aggregate_whitespaces=False,
     alignment_model_name=None,
+    device="auto",
     skip_aligned=False,
     deprecated_json=False,
     target="sentence",
@@ -368,13 +428,21 @@ def process_directory(
                     lang1_file_path = os.path.join(lang1_dir, relative_path)
 
                     aligned_file_path = os.path.join(
-                        aligned_dir, os.path.splitext(relative_path)[0] + (".json" if deprecated_json else ".jsonl")
+                        aligned_dir,
+                        os.path.splitext(relative_path)[0]
+                        + (".json" if deprecated_json else ".jsonl"),
                     )
-                    lang0_sentences_path = os.path.join(lang0_sentences_dir, relative_path)
-                    lang1_sentences_path = os.path.join(lang1_sentences_dir, relative_path)
+                    lang0_sentences_path = os.path.join(
+                        lang0_sentences_dir, relative_path
+                    )
+                    lang1_sentences_path = os.path.join(
+                        lang1_sentences_dir, relative_path
+                    )
 
                     if skip_aligned and os.path.isfile(aligned_file_path):
-                        logging.info("Skipping already aligned file: %s", aligned_file_path)
+                        logging.info(
+                            "Skipping already aligned file: %s", aligned_file_path
+                        )
                         print("⏩", end="", flush=True)
                         continue
 
@@ -401,6 +469,7 @@ def process_directory(
                                 markdown_format,
                                 aggregate_whitespaces,
                                 alignment_model_name,
+                                device,
                                 deprecated_json,
                                 target,
                             )
@@ -428,8 +497,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_dir", help="Path to input directory")
     parser.add_argument("output_dir", help="Path to output directory")
-    parser.add_argument("--lang0", default="va", help="Language code for the first language (default: va)")
-    parser.add_argument("--lang1", default="es", help="Language code for the second language (default: es)")
+    parser.add_argument(
+        "--lang0",
+        default="va",
+        help="Language code for the first language (default: va)",
+    )
+    parser.add_argument(
+        "--lang1",
+        default="es",
+        help="Language code for the second language (default: es)",
+    )
     parser.add_argument(
         "--disable-dump",
         action="store_true",
@@ -471,6 +548,12 @@ if __name__ == "__main__":
         help="Model name for embeddings-based alignment (default: distiluse-base-multilingual-cased-v2)",
     )
     parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Device to use for embeddings (default: auto)",
+    )
+    parser.add_argument(
         "--skip-aligned",
         action="store_true",
         help="Skip already aligned files",
@@ -493,12 +576,20 @@ if __name__ == "__main__":
 
     if not args.static_split:
         if not args.use_multilingual:
-            logging.info("Loading spaCy models for languages: %s, %s", args.lang0, args.lang1)
-            nlp[args.lang0] = spacy.load(language2name[args.lang0])  # Load tokenizer for lang0
-            nlp[args.lang1] = spacy.load(language2name[args.lang1])  # Load tokenizer for lang1
+            logging.info(
+                "Loading spaCy models for languages: %s, %s", args.lang0, args.lang1
+            )
+            nlp[args.lang0] = spacy.load(
+                language2name[args.lang0]
+            )  # Load tokenizer for lang0
+            nlp[args.lang1] = spacy.load(
+                language2name[args.lang1]
+            )  # Load tokenizer for lang1
         else:
             logging.info("Using multilingual spaCy model")
-            nlp[args.lang0] = nlp[args.lang1] = spacy.load("xx_sent_ud_sm")  # Use multilingual model
+            nlp[args.lang0] = nlp[args.lang1] = spacy.load(
+                "xx_sent_ud_sm"
+            )  # Use multilingual model
 
     process_directory(
         args.input_dir,
@@ -510,9 +601,10 @@ if __name__ == "__main__":
         args.markdown_format,
         args.aggregate_whitespaces,
         args.alignment_model_name if args.use_alignment_embeddings else None,
+        args.device,
         args.skip_aligned,
         args.deprecated_json,
         args.target,
     )
-    print(f"{args.target.title()} alignment script completed")
+    print(f"\n{args.target.title()} alignment script completed")
     logging.info(f"{args.target.title()} alignment script completed")
