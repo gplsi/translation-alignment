@@ -57,7 +57,12 @@ def filter_items(content, threshold=0.67, min_length=0, verbose=False, deprecate
     if deprecated_json:
         data = json.loads(content)
     else:
-        data = [json.loads(line) for line in content.splitlines()]
+        data = []
+        for line in content.splitlines():
+            try:
+                data.append(json.loads(line))
+            except json.JSONDecodeError:
+                print(f"Warning: Skipping invalid JSON line: {line}")
 
     nlp0 = _get_nlp(lang0) if enable_ner else None
     nlp1 = _get_nlp(lang1) if enable_ner else None
