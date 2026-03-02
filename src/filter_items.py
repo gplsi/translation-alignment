@@ -166,5 +166,7 @@ def main():
         verbose=not args.verbose,
     )
 
+    print(f"Filtering completed! Args: {args}")
+
 if __name__ == "__main__":
     main()
