@@ -6,6 +6,12 @@ RAISE_ON_ERROR = True
 
 _nlp_cache = {}
 
+def _sanitize(raw: str) -> str:
+    """Replace Unicode Line/Paragraph separators that break JSON parsing."""
+    if not raw:
+        return raw
+    return raw.replace("\u2028", "\\n").replace("\u2029", "\\n")
+
 def _get_nlp(lang: str):
     # Map language codes to spaCy models
     model_map = {
@@ -54,6 +60,8 @@ def filter_items(content, threshold=0.67, min_length=0, verbose=False, deprecate
         enable_length (bool): Apply length/ratio filter.
         enable_ner (bool): Apply NER matching filter.
     """
+    content = _sanitize(content)
+
     if deprecated_json:
         data = json.loads(content)
     else:

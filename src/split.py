@@ -13,6 +13,12 @@ from functools import lru_cache
 from pathlib import Path
 
 
+def sanitize_separators(text: str) -> str:
+    """Normalize Unicode line/paragraph separators to standard newlines."""
+    # U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR)
+    return text.replace("\u2028", "\n").replace("\u2029", "\n")
+
+
 def configure_logging(verbose, output_dir):
     """Configure logging to log to stdout or file based on verbosity."""
     if verbose:
@@ -306,7 +312,13 @@ def dump_aligned_sentences_jsonl(aligned, output_file, lang0, lang1):
     logging.info("Dumping aligned sentences to JSONL file: %s", output_file)
     with open(output_file, "w", encoding="utf-8") as out:
         for s0, s1 in aligned:
-            out.write(json.dumps({lang0: s0, lang1: s1}, ensure_ascii=False) + "\n")
+            out.write(
+                json.dumps(
+                    {lang0: s0, lang1: s1},
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
 
 def dump_aligned_sentences_json(aligned, output_file, lang0, lang1):
@@ -345,9 +357,9 @@ def main(
 
     logging.info("Processing files: %s and %s", file0, file1)
     with open(file0, "r", encoding="utf-8") as f:
-        text0 = f.read()
+        text0 = sanitize_separators(f.read())
     with open(file1, "r", encoding="utf-8") as f:
-        text1 = f.read()
+        text1 = sanitize_separators(f.read())
 
     if target == "sentence":
         split = (
