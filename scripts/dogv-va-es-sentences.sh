@@ -2,11 +2,11 @@
 #SBATCH --job-name=dogv-va-es-sentences               # Job name
 #SBATCH --output=logs/dogv-va-es-sentences-[%j].out   # Standard output (stdout) file
 #SBATCH --error=logs/dogv-va-es-sentences-[%j].err    # Standard error (stderr) file
-#SBATCH --partition=titan                             # Cluster partition to use
+#SBATCH --partition=dgx                               # Cluster partition to use
 #SBATCH --mem=32G                                     # Required RAM memory
 #SBATCH --nodes=1                                     # Number of nodes
-#SBATCH --cpus-per-task=1                             # Number of CPUs per task
-#SBATCH --time=24:00:00                               # Maximum execution time (HH:MM:SS)
+#SBATCH --cpus-per-task=2                             # Number of CPUs per task
+#SBATCH --time=48:00:00                               # Maximum execution time (HH:MM:SS)
 
 
 ##################################################
