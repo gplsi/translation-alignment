@@ -24,7 +24,7 @@ if [ $? -ne 0 ]; then          #
 fi                             #
 ################################
 
-python -m src.filter_items "output/dogv (md)/va-es-paragraph/" --lang0 va --lang1 es --enable-length --enable-ner --verbose
+python -m src.filter_items "output/dogv (md)/va-es-paragraph/" --lang0 va --lang1 es --enable-length --verbose
 
 ################################
 if [ $? -ne 0 ]; then          #
@@ -32,7 +32,7 @@ if [ $? -ne 0 ]; then          #
 fi                             #
 ################################
 
-python -m src.dir2file "output/dogv (md)/va-es-paragraph.length.ner" --lang0 va --lang1 es --format jsonl
+python -m src.dir2file "output/dogv (md)/va-es-paragraph.length" --lang0 va --lang1 es --format jsonl
 
 #-------------------------------------------------
 
