@@ -24,7 +24,15 @@ if [ $? -ne 0 ]; then          #
 fi                             #
 ################################
 
-python -m src.dir2file "output/dogv (md)/va-es-documents/" --lang0 va --lang1 es --format jsonl
+python -m src.dir2file "output/dogv (md)/va-es-documents/" --lang0 va --lang1 es --format jsonl --add-partitions --output "output/dogv (md)/va-es-documents.to_cat/dogv.jsonl"
+
+################################
+if [ $? -ne 0 ]; then          #
+    exit 1                     #  [STOP ON ERROR]
+fi                             #
+################################
+
+cat output/dogv\ \(md\)/va-es-documents.to_cat/* > output/dogv\ \(md\)/va-es-documents.jsonl
 
 #-------------------------------------------------
 
