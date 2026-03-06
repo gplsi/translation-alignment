@@ -24,7 +24,7 @@ if [ $? -ne 0 ]; then          #
 fi                             #
 ################################
 
-python -m src.filter_items "output/UJI (plain)/va-en-paragraph/" --lang0 va --lang1 en --enable-length --enable-ner --verbose
+python -m src.filter_items "output/UJI (plain)/va-en-paragraph/" --lang0 va --lang1 en --enable-length --verbose
 
 ################################
 if [ $? -ne 0 ]; then          #
@@ -32,7 +32,7 @@ if [ $? -ne 0 ]; then          #
 fi                             #
 ################################
 
-python -m src.dir2file "output/UJI (plain)/va-en-paragraph.length.ner" --lang0 va --lang1 en --format jsonl
+python -m src.dir2file "output/UJI (plain)/va-en-paragraph.length" --lang0 va --lang1 en --format jsonl
 
 #-------------------------------------------------
 
