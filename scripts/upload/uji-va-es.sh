@@ -1,0 +1,3 @@
+hf upload gplsi/uji_parallel_va_es "output/UJI (plain)/va-es-documents.curated.jsonl" data/train/va-es-documents.curated.jsonl --repo-type dataset
+hf upload gplsi/uji_parallel_va_es "output/UJI (plain)/va-es-paragraph.length.curated.jsonl" data/train/va-es-paragraph.length.curated.jsonl --repo-type dataset
+hf upload gplsi/uji_parallel_va_es "output/UJI (plain)/va-es-sentence.length.ner.curated.jsonl" data/train/va-es-sentence.length.ner.curated.jsonl --repo-type dataset
