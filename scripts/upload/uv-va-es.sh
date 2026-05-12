@@ -1,0 +1,3 @@
+hf upload gplsi/uv_parallel_va_es "output/UV (plain)/va-es-documents.curated.jsonl" data/train/va-es-documents.curated.jsonl --repo-type dataset
+hf upload gplsi/uv_parallel_va_es "output/UV (plain)/va-es-paragraph.length.curated.jsonl" data/train/va-es-paragraph.length.curated.jsonl --repo-type dataset
+hf upload gplsi/uv_parallel_va_es "output/UV (plain)/va-es-sentence.length.ner.curated.jsonl" data/train/va-es-sentence.length.ner.curated.jsonl --repo-type dataset
