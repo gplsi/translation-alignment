@@ -1,0 +1,3 @@
+hf upload gplsi/actualidad_ua_parallel "output/actualidad-ua (md)/va-es-documents.curated.jsonl" data/train/va-es-documents.curated.jsonl --repo-type dataset
+hf upload gplsi/actualidad_ua_parallel "output/actualidad-ua (md)/va-es-paragraph.length.curated.jsonl" data/train/va-es-paragraph.length.curated.jsonl --repo-type dataset
+hf upload gplsi/actualidad_ua_parallel "output/actualidad-ua (md)/va-es-sentence.length.ner.curated.jsonl" data/train/va-es-sentence.length.ner.curated.jsonl --repo-type dataset
